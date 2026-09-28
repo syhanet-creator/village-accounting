@@ -1907,7 +1907,7 @@ function LedgerScreen({ data }) {
   );
 }
 
-function SettingsScreen({ data, onImport, onUpdateOrgName, saveStatus }) {
+function SettingsScreen({ data, onImport, onUpdateOrgName, saveStatus, menuClickTotal }) {
   const fileRef = useRef(null);
   const [editing, setEditing] = useState(false);
   const [orgName, setOrgName] = useState(data.orgName);
@@ -1936,7 +1936,9 @@ function SettingsScreen({ data, onImport, onUpdateOrgName, saveStatus }) {
         React.createElement(Btn, { variant: "outline", size: "lg", icon: "download", onClick: () => fileRef.current.click() }, "저장한 자료 불러오기"),
         React.createElement("input", { type: "file", accept: ".json", ref: fileRef, style: { display: "none" }, onChange: e => handleImportFile(e, onImport) })
       )
-    )
+    ),
+    React.createElement("div", { style: { textAlign: "center", marginTop: 4, fontSize: 11.5, color: "var(--ink-soft)" } },
+      `메뉴 이용 ${fmtNum(menuClickTotal)}회`)
   );
 }
 
@@ -2008,6 +2010,7 @@ function App() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState("saved"); // 'saved' | 'error'
   const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [menuClickTotal, setMenuClickTotal] = useState(0); // 사이드바 메뉴 클릭 수 합계(MongoDB 집계)
   const isMobile = useIsMobile();
 
   // 데이터가 바뀔 때마다 자동으로 이 PC의 저장소에 저장한다.
@@ -2020,6 +2023,24 @@ function App() {
       setSaveStatus("error");
     }
   }, [data]);
+
+  // 페이지가 열릴 때 모든 메뉴(링크)의 현재 클릭 수를 한 번에 가져와 합계를 표시한다.
+  // 값을 받기 전에는 0회로 보이고, 받으면 실제 값으로 갱신된다. 실패해도 화면 사용에는 지장이 없다.
+  useEffect(() => {
+    fetch("/api/clicks")
+      .then(r => r.ok ? r.json() : null)
+      .then(json => { if (json && typeof json.total === "number") setMenuClickTotal(json.total); })
+      .catch(() => {});
+  }, []);
+  // 메뉴를 누를 때마다 그 메뉴의 클릭 수를 1 늘린다(화면은 바로, 서버 기록은 백그라운드로).
+  function trackMenuClick(linkId) {
+    setMenuClickTotal(n => n + 1);
+    fetch("/api/clicks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ linkId }),
+    }).catch(() => {});
+  }
 
   function saveVoucher(v) {
     setData(prev => {
@@ -2149,7 +2170,7 @@ function App() {
     setData(prev => ({ ...prev, orgSetupDone: true, orgName, orgType }));
   }
   function updateOrgName(orgName) { setData(prev => ({ ...prev, orgName })); }
-  function goNav(key) { setNav(key); setMoreOpen(false); if (key !== "voucher") setEditingVoucher(null); }
+  function goNav(key) { setNav(key); setMoreOpen(false); if (key !== "voucher") setEditingVoucher(null); trackMenuClick(key); }
 
   if (!data.orgSetupDone) {
     return React.createElement(OnboardingScreen, { onComplete: completeOnboarding });
@@ -2207,7 +2228,7 @@ function App() {
         nav === "contract" && React.createElement(ContractScreen, { data, onAdd: addContract, onDelete: deleteContract, onUpdateContract: updateContract }),
         nav === "reports" && React.createElement(ReportsScreen, { data }),
         nav === "yearend" && React.createElement(YearEndScreen, { data, onCloseYear: closeYear }),
-        nav === "settings" && React.createElement(SettingsScreen, { data, onImport: handleImport, onUpdateOrgName: updateOrgName, saveStatus }),
+        nav === "settings" && React.createElement(SettingsScreen, { data, onImport: handleImport, onUpdateOrgName: updateOrgName, saveStatus, menuClickTotal }),
       )
     ),
     isMobile && React.createElement("nav", { className: "bottom-tabbar" },
