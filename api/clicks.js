@@ -58,6 +58,7 @@ module.exports = async (req, res) => {
 
     res.status(405).json({ error: "method not allowed" });
   } catch (e) {
-    res.status(500).json({ error: "server error" });
+    // 원인 파악을 위해 실제 오류 메시지를 그대로 내려준다(비밀번호 등 민감정보는 포함되지 않음).
+    res.status(500).json({ error: "server error", detail: e && e.message });
   }
 };
